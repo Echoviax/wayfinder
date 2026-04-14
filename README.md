@@ -44,7 +44,6 @@ If you are playing via Steam / Proton, launch **`WayfinderLauncher`** through yo
 Yes these should be in a logs folder. Don't think about it too hard.
 
 * **`ModLoader_Log.txt`**: Records startup and lists every mod that loaded (or failed).
-* **`Patcher_CrashLog.txt`**: If the bootstrapper fails to hook the game, the error will be here.
 
 ---
 
