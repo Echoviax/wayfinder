@@ -26,7 +26,9 @@ namespace Wayfinder.Core
             }
             catch { }
 
-            string exePath = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName)!;
+            string coreAssemblyPath = Assembly.GetExecutingAssembly().Location;
+            string wayfinderFolder = Path.GetDirectoryName(coreAssemblyPath)!;
+            string exePath = Path.GetFullPath(Path.Combine(wayfinderFolder, ".."));
             string modsDirectory = Path.Combine(exePath, "Mods");
 
             logFilePath = Path.Combine(exePath, "Wayfinder_Log.txt");

@@ -4,27 +4,54 @@ namespace Wayfinder.Launcher
 {
     class Program
     {
+        static string GetDotnetCommand()
+        {
+            if (OperatingSystem.IsWindows())
+                return "dotnet.exe";
+
+            string pathVar = Environment.GetEnvironmentVariable("PATH") ?? "";
+            foreach (var dir in pathVar.Split(':'))
+            {
+                string fullPath = Path.Combine(dir, "dotnet");
+                if (File.Exists(fullPath))
+                    return fullPath;
+            }
+
+            if (File.Exists("/usr/share/dotnet/dotnet")) 
+                return "/usr/share/dotnet/dotnet";
+            if (File.Exists("/usr/local/share/dotnet/dotnet")) 
+                return "/usr/local/share/dotnet/dotnet";
+
+            return "dotnet";
+        }
+
         static void Main()
         {
-            string currentDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName)!;
+            bool isWindows = OperatingSystem.IsWindows();
 
+            string currentDir = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName)!;
             string wayfinderDir = Path.Combine(currentDir, "Wayfinder");
             string hookPath = Path.Combine(wayfinderDir, "Wayfinder.Patcher.dll");
 
-            bool isWindows = OperatingSystem.IsWindows();
-            string targetExe = isWindows ? "Neverway.exe" : "Neverway";
-            string gamePath = Path.Combine(currentDir, targetExe);
+            string moddedDir = Path.Combine(currentDir, "extracted");
+            string gameName = "Neverway";
 
-            if (!File.Exists(gamePath))
+            string targetDll = Path.Combine(moddedDir, $"{gameName}.dll");
+            string runtimeConfig = Path.Combine(moddedDir, $"{gameName}.runtimeconfig.json");
+            string depsFile = Path.Combine(moddedDir, $"{gameName}.deps.json");
+
+            if (!Directory.Exists(moddedDir) || !File.Exists(targetDll))
             {
-                Console.WriteLine($"[Error] Could not find {targetExe} in {currentDir}");
+                Console.WriteLine($"[Error] Couldn't find Neverway.dll or couldn't find a folder titled `extracted`");
+                Console.WriteLine("Please manually unpack the game assemblies before running Wayfinder.");
                 Console.ReadLine();
                 return;
             }
 
             var psi = new ProcessStartInfo
             {
-                FileName = gamePath,
+                FileName = GetDotnetCommand(),
+                Arguments = $"exec --runtimeconfig \"{runtimeConfig}\" --depsfile \"{depsFile}\" --additionalProbingPath \"{moddedDir}\" \"{targetDll}\"",
                 UseShellExecute = false,
                 WorkingDirectory = currentDir
             };
@@ -37,12 +64,13 @@ namespace Wayfinder.Launcher
 
             try
             {
-                Console.WriteLine($"Launching {targetExe} with Wayfinder Hook...");
+                Console.WriteLine($"Launching {gameName} through a sandbox with Wayfinder Hooked in...");
                 Process.Start(psi);
             }
             catch (Exception ex)
             {
                 Console.WriteLine("Failed to launch game: " + ex.Message);
+                Console.WriteLine("Ensure the .NET 8 SDK is installed and accessible.");
                 Console.ReadLine();
             }
         }
