@@ -24,6 +24,8 @@ copy %DIST%\temp_bins\hostpolicy.dll %SUBDIR%\
 rd /s /q %DIST%\temp_bins
 del %SUBDIR%\*.exe
 del %SUBDIR%\*.json
+del %SUBDIR%\*.pdb
+del %DIST%\*.pdb
 
 echo Done! Build located in %DIST%
 pause

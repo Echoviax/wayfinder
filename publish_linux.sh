@@ -24,6 +24,8 @@ cp "$TEMP_BINS/libhostpolicy.so" "$SUBDIR/"
 rm -rf "$TEMP_BINS"
 rm -f "$SUBDIR/Wayfinder.Patcher"
 rm -f "$SUBDIR"/*.json
+rm -f "$SUBDIR"/*.pdb
+rm -f "$DIST"/*.pdb
 
 echo "Setting permissions..."
 chmod +x "$DIST/Wayfinder.Launcher"

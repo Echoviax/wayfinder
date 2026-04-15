@@ -27,6 +27,8 @@ rd /s /q %TEMP_BINS%
 if exist %SUBDIR%\Wayfinder.Patcher del /f /q %SUBDIR%\Wayfinder.Patcher
 if exist %SUBDIR%\Wayfinder.Core del /f /q %SUBDIR%\Wayfinder.Core
 if exist %SUBDIR%\*.json del /f /q %SUBDIR%\*.json
+del %SUBDIR%\*.pdb
+del %DIST%\*.pdb
 
 echo Done! Build located in %DIST%
 pause

@@ -15,10 +15,9 @@ Your folder structure should look like this:
 ```text
 Neverway/
  ├── Neverway.exe
- ├── WayfinderLauncher(.exe)
- ├── RuntimePatcher.dll
- ├── NeverwayModLoader.dll
- ├── 0Harmony.dll
+ ├── Wayfinder.Launcher(.exe)
+ ├── Wayfinder/
+   ├── Varying Dependencies
  └── Mods/
 ```
 
@@ -26,10 +25,10 @@ Neverway/
 Because the mod loader relies on environment variables to hook the game, you cannot launch `Neverway.exe` normally if you want to play with mods.
 
 ### Windows
-Navigate to your game folder and double-click **`WayfinderLauncher.exe`**. This will inject the loader and start the game for you. 
+Navigate to your game folder and double-click **`Wayfinder.Launcher.exe`**. This will inject the loader and start the game for you. 
 
 ### Linux / Steam Deck
-If you are playing via Steam / Proton, launch **`WayfinderLauncher`** through your console.  
+If you are playing via Steam / Proton, launch **`Wayfinder.Launcher`** through your console.  
 
 ---
 
