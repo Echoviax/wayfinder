@@ -2,14 +2,14 @@
 set DIST=.\Dist\Windows
 set SUBDIR=%DIST%\Wayfinder
 
-echo [1/3] Cleaning...
+echo [1/4] Cleaning...
 if exist %DIST% rd /s /q %DIST%
 mkdir %SUBDIR%
 
-echo [2/3] Publishing Launcher
-dotnet publish Wayfinder.Launcher -c Release -r win-x64 --self-contained false -p:PublishSingleFile=true -o %DIST%
+echo [2/4] Publishing Launcher
+dotnet publish Wayfinder.Launcher -r win-x64 -c Release /p:PublishSingleFile=true /p:SelfContained=false -o %DIST%
 
-echo [3/3] Publishing Mod Loader
+echo [3/4] Publishing Mod Loader...
 dotnet publish Wayfinder.Patcher -c Release --self-contained false -o %SUBDIR%
 dotnet publish Wayfinder.Core -c Release --self-contained false -o %SUBDIR%
 
@@ -25,5 +25,5 @@ rd /s /q %DIST%\temp_bins
 del %SUBDIR%\*.exe
 del %SUBDIR%\*.json
 
-echo Done!
+echo Done! Build located in %DIST%
 pause
