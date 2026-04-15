@@ -10,5 +10,8 @@
   <ItemGroup>
     <PackageReference Include="Lib.Harmony" Version="2.4.2" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Wayfinder.Core\Wayfinder.Core.csproj" />
+  </ItemGroup>
 
 </Project>
