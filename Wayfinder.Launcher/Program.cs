@@ -75,6 +75,53 @@ namespace Wayfinder.Launcher
                     Decompiler.Extractor.ExtractBundle(gameExePath, moddedDir);
                     FixRuntimeConfig(runtimeConfig);
 
+                    var files = Directory.EnumerateFiles(currentDir, "*.*", SearchOption.AllDirectories)
+                        .Where(file =>
+                            !file.StartsWith(moddedDir, StringComparison.OrdinalIgnoreCase) &&
+                            (file.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+                             file.EndsWith(".so", StringComparison.OrdinalIgnoreCase) ||
+                             file.EndsWith(".dylib", StringComparison.OrdinalIgnoreCase)))
+                        .Select(file => new
+                        {
+                            Source = file,
+                            Destination = Path.Combine(moddedDir, Path.GetFileName(file))
+                        });
+
+                    foreach (var file in files)
+                        File.Copy(file.Source, file.Destination, true);
+
+                    string resourcesDir = Path.Combine(currentDir, "resources");
+                    string targetResourcesDir = Path.Combine(moddedDir, "resources");
+
+                    if (Directory.Exists(resourcesDir))
+                    {
+                        var resourceFiles = Directory.EnumerateFiles(resourcesDir, "*.*", SearchOption.AllDirectories);
+                        foreach (var file in resourceFiles)
+                        {
+                            string relativePath = file.Substring(resourcesDir.Length + 1);
+                            string destinationPath = Path.Combine(targetResourcesDir, relativePath);
+
+                            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+                            File.Copy(file, destinationPath, true);
+                        }
+                    }
+
+                    string runtimesDir = Path.Combine(currentDir, "runtimes");
+                    string targetRuntimesDir = Path.Combine(moddedDir, "runtimes");
+
+                    if (Directory.Exists(runtimesDir))
+                    {
+                        var runtimeFiles = Directory.EnumerateFiles(runtimesDir, "*.*", SearchOption.AllDirectories);
+                        foreach (var file in runtimeFiles)
+                        {
+                            string relativePath = file.Substring(runtimesDir.Length + 1);
+                            string destinationPath = Path.Combine(targetRuntimesDir, relativePath);
+
+                            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath)!);
+                            File.Copy(file, destinationPath, true);
+                        }
+                    }
+
                     Console.WriteLine("[Wayfinder] Extraction complete!");
                 }
                 catch (Exception ex)

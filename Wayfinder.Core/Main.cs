@@ -150,7 +150,7 @@ namespace Wayfinder.Core
 
                 render.UiBatch.DrawText(
                     11,
-                    "Wayfinder v0.1.2",
+                    "Wayfinder v0.2.0",
                     customTextPosition,
                     new DrawInfo(Palette.Colors[2] * ____menuFadeDelta, 0.6f)
                     {
