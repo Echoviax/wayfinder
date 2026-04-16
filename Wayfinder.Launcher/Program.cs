@@ -25,6 +25,22 @@ namespace Wayfinder.Launcher
             return "dotnet";
         }
 
+        static void FixRuntimeConfig(string configPath)
+        {
+            if (!File.Exists(configPath)) return;
+
+            string fixedJson = @"{
+  ""runtimeOptions"": {
+    ""tfm"": ""net8.0"",
+    ""framework"": {
+      ""name"": ""Microsoft.NETCore.App"",
+      ""version"": ""8.0.0""
+    }
+  }
+}";
+            File.WriteAllText(configPath, fixedJson);
+        }
+
         static void Main()
         {
             bool isWindows = OperatingSystem.IsWindows();
@@ -33,7 +49,7 @@ namespace Wayfinder.Launcher
             string wayfinderDir = Path.Combine(currentDir, "Wayfinder");
             string hookPath = Path.Combine(wayfinderDir, "Wayfinder.Patcher.dll");
 
-            string moddedDir = Path.Combine(currentDir, "extracted");
+            string moddedDir = Path.Combine(currentDir, "ModdedCoreFiles");
             string gameName = "Neverway";
 
             string targetDll = Path.Combine(moddedDir, $"{gameName}.dll");
@@ -42,10 +58,31 @@ namespace Wayfinder.Launcher
 
             if (!Directory.Exists(moddedDir) || !File.Exists(targetDll))
             {
-                Console.WriteLine($"[Error] Couldn't find Neverway.dll or couldn't find a folder titled `extracted`");
-                Console.WriteLine("Please manually unpack the game assemblies before running Wayfinder.");
-                Console.ReadLine();
-                return;
+                Console.WriteLine("[Wayfinder] Extracted files not found. Unpacking assemblies now (only happens on first boot)...");
+
+                string gameExeName = isWindows ? $"{gameName}.exe" : gameName;
+                string gameExePath = Path.Combine(currentDir, gameExeName);
+
+                if (!File.Exists(gameExePath))
+                {
+                    Console.WriteLine($"[Error] Could not find {gameExeName} to extract from.");
+                    Console.ReadLine();
+                    return;
+                }
+
+                try
+                {
+                    Decompiler.Extractor.ExtractBundle(gameExePath, moddedDir);
+                    FixRuntimeConfig(runtimeConfig);
+
+                    Console.WriteLine("[Wayfinder] Extraction complete!");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Error] Failed to extract: {ex.Message}");
+                    Console.ReadLine();
+                    return;
+                }
             }
 
             var psi = new ProcessStartInfo

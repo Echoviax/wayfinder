@@ -6,4 +6,31 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>C:\Users\Echo\Documents\Wayfinder-Example\Wayfinder\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="RoadGameAssembly">
+      <HintPath>C:\Users\Echo\Documents\nw-decompiled\Neverway.dll</HintPath> 
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Bang">
+      <HintPath>C:\Users\Echo\Documents\nw-decompiled\Bang.dll</HintPath> 
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Murder">
+      <HintPath>C:\Users\Echo\Documents\nw-decompiled\Murder.dll</HintPath> 
+      <Private>false</Private>
+    </Reference>
+    
+    <Reference Include="Wayfinder">
+      <HintPath>C:\Users\Echo\Documents\Wayfinder-Example\Wayfinder\Wayfinder.Core.dll</HintPath> 
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
 </Project>

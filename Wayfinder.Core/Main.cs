@@ -1,9 +1,15 @@
-﻿using System;
-using System.Diagnostics;
-using System.IO;
+﻿using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
+using System.Numerics;
+using HarmonyLib;
+using Murder.Core.Geometry;
+using Murder.Core.Graphics;
+using Murder.Services;
+using Murder.Utilities;
+using Road.Core;
+using Road.StateMachines;
 
 namespace Wayfinder.Core
 {
@@ -36,6 +42,8 @@ namespace Wayfinder.Core
 
             LogInfo("Initializing Wayfinder...");
 
+            ApplyCorePatches();
+
             if (!Directory.Exists(modsDirectory))
             {
                 Directory.CreateDirectory(modsDirectory);
@@ -57,6 +65,22 @@ namespace Wayfinder.Core
                 {
                     LogError($"Failed to load {Path.GetFileName(modFile)}: {ex.Message}");
                 }
+            }
+        }
+
+        private static void ApplyCorePatches()
+        {
+            LogInfo("Applying internal Wayfinder patches...");
+            try
+            {
+                var harmony = new Harmony("com.echoviax.wayfinder.core");
+
+                harmony.PatchAll();
+                LogSuccess("Core patches applied successfully!");
+            }
+            catch (Exception ex)
+            {
+                LogError("Failed to inject Wayfinder core patches: " + ex);
             }
         }
 
@@ -114,5 +138,27 @@ namespace Wayfinder.Core
         }
 
         #endregion
+
+        [HarmonyPatch(typeof(MainMenu))]
+        [HarmonyPatch("DrawFootnotes")]
+        internal static class MainMenu_DrawFootnotes_Patch
+        {
+            static void Postfix(MainMenu __instance, RenderContext render, float ____menuFadeDelta)
+            {
+                Point point = render.Camera.Size / 2f;
+                Vector2 customTextPosition = new Vector2(point.X, render.Camera.Size.Y - 25);
+
+                render.UiBatch.DrawText(
+                    11,
+                    "Wayfinder v0.1.2",
+                    customTextPosition,
+                    new DrawInfo(Palette.Colors[2] * ____menuFadeDelta, 0.6f)
+                    {
+                        Origin = Vector2Helper.Center,
+                        CultureInvariant = true
+                    }
+                );
+            }
+        }
     }
 }
