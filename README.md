@@ -55,6 +55,8 @@ Creating a mod through *Wayfinder* is simple.
 
 The Mod Loader will automatically find and invoke your `Start()` method when the game boots. You can initialize your Harmony patches or other code from there.
 
+---
+
 ### Neverway Modding Discord
 Interested in seeing further development in modding? Join the modding [Discord](https://discord.gg/BzgPQgw2nD)!
 ### Support Us...
