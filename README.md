@@ -59,7 +59,7 @@ To create a mod for Wayfinder, you will need:
 2. **Wayfinder.Core.dll** (Provided in the Wayfinder folder of the latest release)
 3. **HarmonyLib** (Provided in the Wayfinder folder of the latest release)
 
-Create a new C# Class Library project, reference the required DLLs, and create a class that implements `IWayfinderMod`.
+Create a new C# Class Library project, reference the required DLLs, and create a class that implements `IWayfinderMod` (`using Wayfinder.API`).
 
 ### The `IWayfinderMod` Interface
 
@@ -127,7 +127,7 @@ namespace ModTemplate
                 11, // The engine's standard Pixel Font ID
                 "Template Mod is Active!",
                 new Vector2(5, 5),
-                new DrawInfo(0.05f) // Draw at 0.05f depth so it sits cleanly on top of the UI
+                new DrawInfo(0.05f)
                 {
                     Color = Palette.Colors[6]
                 }
