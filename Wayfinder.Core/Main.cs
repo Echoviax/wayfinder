@@ -1,8 +1,9 @@
-﻿using HarmonyLib;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
+using System.Text.Json; // Added for saving/loading
+using HarmonyLib;
 using Wayfinder.API;
 
 namespace Wayfinder.Core
@@ -22,7 +23,12 @@ namespace Wayfinder.Core
     public static class LoaderCore
     {
         public static List<ModInstance> LoadedMods { get; } = new List<ModInstance>();
+
         private static string logFilePath = "";
+        private static string configFilePath = "";
+
+        // Dictionary to track the saved state of each mod by its Name
+        private static Dictionary<string, bool> modStates = new Dictionary<string, bool>();
 
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -45,11 +51,14 @@ namespace Wayfinder.Core
             string modsDirectory = Path.Combine(exePath, "Mods");
 
             logFilePath = Path.Combine(exePath, "Wayfinder_Log.txt");
+            configFilePath = Path.Combine(Path.Combine(exePath, "Mods"), "Wayfinder_Config.json");
+
             File.WriteAllText(logFilePath, $"--- Wayfinder Started at {DateTime.Now} ---\n");
 
             LogInfo("Initializing Wayfinder...");
 
             ApplyCorePatches();
+            LoadConfig();
 
             if (!Directory.Exists(modsDirectory))
             {
@@ -75,6 +84,36 @@ namespace Wayfinder.Core
             }
         }
 
+        private static void LoadConfig()
+        {
+            if (File.Exists(configFilePath))
+            {
+                try
+                {
+                    string json = File.ReadAllText(configFilePath);
+                    modStates = JsonSerializer.Deserialize<Dictionary<string, bool>>(json) ?? new Dictionary<string, bool>();
+                }
+                catch (Exception ex)
+                {
+                    LogWarning($"Failed to load config, creating a new one. {ex.Message}");
+                    modStates = new Dictionary<string, bool>();
+                }
+            }
+        }
+
+        private static void SaveConfig()
+        {
+            try
+            {
+                string json = JsonSerializer.Serialize(modStates, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(configFilePath, json);
+            }
+            catch (Exception ex)
+            {
+                LogError($"Failed to save config: {ex.Message}");
+            }
+        }
+
         private static void ApplyCorePatches()
         {
             try
@@ -93,8 +132,6 @@ namespace Wayfinder.Core
         private static void StartMod(Assembly modAssembly)
         {
             var modTypes = modAssembly.GetTypes().Where(t => typeof(IWayfinderMod).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract).ToList();
-            string modName = modAssembly.GetName().Name ?? "Unknown Mod";
-            Type? entryType = modAssembly.GetType("ModEntry");
 
             if (modTypes.Count == 0)
             {
@@ -106,15 +143,33 @@ namespace Wayfinder.Core
             {
                 try
                 {
-                    // Create mod instance
                     if (Activator.CreateInstance(type) is IWayfinderMod modInstance)
                     {
-                        LogInfo($"Starting mod: {modInstance.Name} v{modInstance.Version} by {modInstance.Author}");
+                        // Saved state
+                        bool shouldBeEnabled = true;
+                        if (modStates.TryGetValue(modInstance.Name, out bool savedState))
+                        {
+                            shouldBeEnabled = savedState;
+                        }
+                        else
+                        {
+                            // First time seeing this mod
+                            modStates[modInstance.Name] = true;
+                            SaveConfig();
+                        }
 
-                        modInstance.Start();
-
-                        LoadedMods.Add(new ModInstance(modInstance, true));
-                        LogSuccess($"Successfully loaded {modInstance.Name}.");
+                        if (shouldBeEnabled)
+                        {
+                            LogInfo($"Starting mod: {modInstance.Name} v{modInstance.Version} by {modInstance.Author}");
+                            modInstance.Start();
+                            LoadedMods.Add(new ModInstance(modInstance, true));
+                            LogSuccess($"Successfully loaded and enabled {modInstance.Name}.");
+                        }
+                        else
+                        {
+                            LogInfo($"Registered mod (disabled in config): {modInstance.Name} v{modInstance.Version}");
+                            LoadedMods.Add(new ModInstance(modInstance, false));
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -124,7 +179,6 @@ namespace Wayfinder.Core
             }
         }
 
-        // This WILL be used in the UI later..
         public static void ToggleMod(ModInstance mod)
         {
             try
@@ -141,6 +195,9 @@ namespace Wayfinder.Core
                     mod.Mod.Start();
                     mod.IsEnabled = true;
                 }
+
+                modStates[mod.Mod.Name] = mod.IsEnabled;
+                SaveConfig();
             }
             catch (Exception ex)
             {
