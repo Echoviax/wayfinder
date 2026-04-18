@@ -8,6 +8,7 @@ namespace Wayfinder.Core
 {
     public static class LoaderCore
     {
+        public static List<string> LoadedMods { get; } = new List<string>();
         private static string logFilePath = "";
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -89,16 +90,13 @@ namespace Wayfinder.Core
                 {
                     LogSuccess("Running Start() from " + modName);
                     startMethod.Invoke(null, null);
+                    LoadedMods.Add(modName);
                 }
                 else
-                {
                     LogWarning("Skipping loading " + modName + ", missing `public static void Start()`");
-                }
             }
             else
-            {
                 LogWarning("Skipping loading " + modName + ", missing 'ModEntry' class");
-            }
         }
 
         #region Specialized Logging Functions

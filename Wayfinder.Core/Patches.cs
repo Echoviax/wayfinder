@@ -63,6 +63,15 @@ namespace Wayfinder.Patches
         }
     }
 
+    [HarmonyPatch(typeof(MainMenu), "DrawMainMenu")]
+    public static class MainMenu_CaptureMainMenu_Patch
+    {
+        static void Prefix(MainMenu __instance)
+        {
+            WayfinderMenuManager.ActiveMainMenu = __instance;
+        }
+    }
+
     [HarmonyPatch]
     public static class PlayerInput_VerticalMenu_Patch
     {
