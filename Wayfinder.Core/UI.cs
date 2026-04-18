@@ -1,5 +1,6 @@
 ﻿using Bang.Entities;
 using Bang.StateMachines;
+using FMOD;
 using HarmonyLib;
 using Murder;
 using Murder.Core.Geometry;
@@ -84,8 +85,17 @@ namespace Wayfinder.UI
 
                 if (pressedValue.X != 0)
                 {
-                    // can't actually unload things yet anyway
-                    SoundServices.Play(sounds.OnError);
+                    var loadedMods = Core.LoaderCore.LoadedMods;
+
+                    if (_optionsMenu.Selection >= 1 && _optionsMenu.Selection <= loadedMods.Count)
+                    {
+                        _lastSettingChangeTime = Game.NowUnscaled;
+                        SoundServices.Play(sounds.BaseMenu.SelectionChange);
+                        var targetMod = loadedMods[_optionsMenu.Selection - 1];
+                        Core.LoaderCore.ToggleMod(targetMod);
+
+                        _optionsMenu.Options[_optionsMenu.Selection].Check = targetMod.IsEnabled;
+                    }
                 }
 
                 // 106 is back command. esc for example
@@ -136,10 +146,11 @@ namespace Wayfinder.UI
             {
                 for (int i = 0; i < loadedMods.Count; i++)
                 {
+                    var mod = loadedMods[i];
                     optionsArray[i + 1] = new OptionsStateMachine.OptionsData(loadedMods[i].Mod.Name)
                     {
-                        Check = true,
-                        Tooltip = "Mod is currently active.\nRequires a restart to disable."
+                        Check = mod.IsEnabled,
+                        Tooltip = mod.Mod.Description ?? "No mod description provided"
                     };
                 }
             }
