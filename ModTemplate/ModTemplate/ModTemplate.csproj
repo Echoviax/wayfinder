@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>C:\Users\Echo\Documents\Wayfinder-builds\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Wayfinder.Core">
+      <HintPath>C:\Users\Echo\Documents\Windows\Wayfinder\Wayfinder.Core.dll</HintPath> 
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Murder">
+      <HintPath>C:\Users\Echo\Documents\nw-decompiled\Murder.dll</HintPath> 
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="RoadGameAssembly">
+      <HintPath>C:\Program Files (x86)\Steam\steamapps\content\app_4520130\depot_4520131\Neverway.dll\Neverway.dll</HintPath> 
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

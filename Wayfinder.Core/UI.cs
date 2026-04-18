@@ -136,7 +136,7 @@ namespace Wayfinder.UI
             {
                 for (int i = 0; i < loadedMods.Count; i++)
                 {
-                    optionsArray[i + 1] = new OptionsStateMachine.OptionsData(loadedMods[i])
+                    optionsArray[i + 1] = new OptionsStateMachine.OptionsData(loadedMods[i].Mod.Name)
                     {
                         Check = true,
                         Tooltip = "Mod is currently active.\nRequires a restart to disable."

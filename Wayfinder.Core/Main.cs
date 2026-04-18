@@ -1,14 +1,27 @@
-﻿using System.Diagnostics;
+﻿using HarmonyLib;
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
-using HarmonyLib;
+using Wayfinder.API;
 
 namespace Wayfinder.Core
 {
+    public class ModInstance
+    {
+        public API.IWayfinderMod Mod { get; }
+        public bool IsEnabled { get; set; }
+
+        public ModInstance(API.IWayfinderMod mod, bool isEnabled)
+        {
+            Mod = mod;
+            IsEnabled = isEnabled;
+        }
+    }
+
     public static class LoaderCore
     {
-        public static List<string> LoadedMods { get; } = new List<string>();
+        public static List<ModInstance> LoadedMods { get; } = new List<ModInstance>();
         private static string logFilePath = "";
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -64,7 +77,6 @@ namespace Wayfinder.Core
 
         private static void ApplyCorePatches()
         {
-            LogInfo("Applying internal Wayfinder patches...");
             try
             {
                 var harmony = new Harmony("com.echoviax.wayfinder.core");
@@ -80,23 +92,60 @@ namespace Wayfinder.Core
 
         private static void StartMod(Assembly modAssembly)
         {
+            var modTypes = modAssembly.GetTypes().Where(t => typeof(IWayfinderMod).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract).ToList();
             string modName = modAssembly.GetName().Name ?? "Unknown Mod";
             Type? entryType = modAssembly.GetType("ModEntry");
 
-            if (entryType != null)
+            if (modTypes.Count == 0)
             {
-                MethodInfo? startMethod = entryType.GetMethod("Start", BindingFlags.Public | BindingFlags.Static);
-                if (startMethod != null)
+                LogWarning($"Skipping {modAssembly.GetName().Name}, no IWayfinderMod implementation found.");
+                return;
+            }
+
+            foreach (var type in modTypes)
+            {
+                try
                 {
-                    LogSuccess("Running Start() from " + modName);
-                    startMethod.Invoke(null, null);
-                    LoadedMods.Add(modName);
+                    // Create mod instance
+                    if (Activator.CreateInstance(type) is IWayfinderMod modInstance)
+                    {
+                        LogInfo($"Starting mod: {modInstance.Name} v{modInstance.Version} by {modInstance.Author}");
+
+                        modInstance.Start();
+
+                        LoadedMods.Add(new ModInstance(modInstance, true));
+                        LogSuccess($"Successfully loaded {modInstance.Name}.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogError($"Error starting mod class {type.Name}: {ex.Message}");
+                }
+            }
+        }
+
+        // This WILL be used in the UI later..
+        public static void ToggleMod(ModInstance mod)
+        {
+            try
+            {
+                if (mod.IsEnabled)
+                {
+                    LogInfo($"Stopping mod: {mod.Mod.Name}");
+                    mod.Mod.Stop();
+                    mod.IsEnabled = false;
                 }
                 else
-                    LogWarning("Skipping loading " + modName + ", missing `public static void Start()`");
+                {
+                    LogInfo($"Starting mod: {mod.Mod.Name}");
+                    mod.Mod.Start();
+                    mod.IsEnabled = true;
+                }
             }
-            else
-                LogWarning("Skipping loading " + modName + ", missing 'ModEntry' class");
+            catch (Exception ex)
+            {
+                LogError($"Failed to toggle {mod.Mod.Name}: {ex.Message}");
+            }
         }
 
         #region Specialized Logging Functions
