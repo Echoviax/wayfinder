@@ -15,17 +15,20 @@ Your folder structure should look like this:
 ```text
 Neverway/
  ├── Neverway.exe
- ├── Wayfinder.Launcher(.exe)
+ ├── Wayfinder.Launcher.exe
+ ├── ModdedCoreFiles/ (Generated on first boot)
  ├── Wayfinder/
-   ├── 0Harmony.dll
-   ├── Wayfinder.Core.dll
-   ├── Wayfinder.Patcher.dll
-   └── Varying Neverway Dependencies
+ │   ├── 0Harmony.dll
+ │   ├── Wayfinder.Core.dll
+ │   └── Wayfinder.Patches.dll
  └── Mods/
+     └── Configs/ (Generated on first boot)
+       └── Wayfinder_Config.json (Generated on first boot)
 ```
 
 **Step 2: Launching the Game**
-Because the mod loader relies on environment variables to hook the game, you cannot launch `Neverway.exe` normally if you want to play with mods.
+Because the mod loader relies on environment variables to hook the game, you cannot launch `Neverway.exe` normally if you want to play with mods.  
+*Note: the first time you launch Wayfinder, it will extract your game to a moddable state. Don't panic if it takes a minute to boot!*
 
 ### Windows
 Navigate to your game folder and double-click **`Wayfinder.Launcher.exe`**. This will inject the loader and start the game for you. 
@@ -59,15 +62,16 @@ To create a mod for Wayfinder, you will need:
 2. **Wayfinder.Core.dll** (Provided in the Wayfinder folder of the latest release)
 3. **HarmonyLib** (Provided in the Wayfinder folder of the latest release)
 
-Create a new C# Class Library project, reference the required DLLs, and create a class that implements `IWayfinderMod` (`using Wayfinder.API`).
+Create a new C# Class Library project, reference the required DLLs, and create a class that implements `IWayfinderMod`/`IConfigurableMod` (`using Wayfinder.API`).
 
-### The `IWayfinderMod` Interface
+### The Mod Interfaces
 
-Your main mod class must implement this interface. Wayfinder will automatically scan your `.dll` for any class using this interface and load it.  
-If you don't reference `IWayfinderMod`, then your mod **will not load**.
+Your main mod class must implement either `IWayfinderMod` or `IConfigurableMod`, depending on if you will need a config. This can be changed at any time. Wayfinder will automatically scan your `.dll` for any class using either of these interfaces and load it.  
+If you don't implement an interface, then your mod **will not load**.
 
 ### Metadata Properties
 These properties are read by the Wayfinder UI to display your mod to the player.
+* `string ID { get; }`: The unique identifier for your mod. General format is `com.yourname.modname`. **DO NOT** change this after your first publish, or users will lose all saved settings!
 * `string Name { get; }`: The display name of your mod. Keep it relatively short so it fits in the menu
 * `string Description { get; }`: A brief explanation of what your mod does. This is displayed as a tooltip when the player hovers over your mod in the menu. Consider a sentence or 2
 * `string Version { get; }`: Your mod's current version (ex., `"1.0.0"`)
@@ -77,9 +81,9 @@ These properties are read by the Wayfinder UI to display your mod to the player.
 * `void Start()`: Called when the mod is enabled. This is where you should instantiate Harmony, apply your patches, register custom events, or spawn persistent entities.
 * `void Stop()`: Called when the player disables your mod in the menu. **This must completely undo everything your mod did.** You must unpatch your Harmony instances, destroy any custom UI/entities you spawned, and unhook any C# events to prevent memory leaks and game crashes.
 
-### Example Mod Template
+### Example Mod Templates
 
-Included below, as well as in the repo is a copy-pasteable template for a Wayfinder mod using Harmony
+Included below, as well as in the repo are copy-pasteable templates for a Wayfinder mod using Harmony
 
 ```csharp
 using System.Numerics;
@@ -94,18 +98,17 @@ namespace ModTemplate
 {
     public class ModEntry : IWayfinderMod
     {
-        // Replace all of this
+        public string ID => "com.yourname.templatemod";
         public string Name => "Template Mod";
         public string Description => "A simple mod to test the Wayfinder API.";
         public string Version => "1.0.0";
         public string Author => "Your Name";
 
-        // Keep a reference to access it in your Stop()
         private Harmony _harmony;
 
         public void Start()
         {
-            _harmony = new Harmony("com.yourname.templatemod");
+            _harmony = new Harmony(ID);
             _harmony.PatchAll();
         }
 
@@ -116,7 +119,7 @@ namespace ModTemplate
         }
     }
 
-    // A test patch! It draws text in the top left when on the main menu
+    // A test patch!
     [HarmonyPatch(typeof(MainMenu), "DrawMainMenu")]
     public static class MainMenu_VisualTest_Patch
     {
@@ -124,9 +127,80 @@ namespace ModTemplate
         {
             // Draw text in the top-left corner of the screen
             render.UiBatch.DrawText(
-                11, // The engine's standard Pixel Font ID
+                11,
                 "Template Mod is Active!",
-                new Vector2(5, 5),
+                new Vector2(5, 20),
+                new DrawInfo(0.05f)
+                {
+                    Color = Palette.Colors[6]
+                }
+            );
+        }
+    }
+}
+```
+
+```csharp
+using System.Numerics;
+using HarmonyLib;
+using Murder.Core.Graphics;
+using Murder.Services;
+using Road.Core;
+using Road.StateMachines;
+using Wayfinder.API;
+
+namespace ConfigModTemplate
+{
+    public class ModEntry : IConfigurableMod
+    {
+        public string ID => "com.yourname.configmod";
+        public string Name => "Config Template Mod";
+        public string Description => "A simple mod to test the Wayfinder API.";
+        public string Version => "1.0.0";
+        public string Author => "Your Name";
+
+        private Harmony _harmony;
+
+        // Static so the patch below can easily access them
+        public static bool ShowText = true;
+        public static int TextX = 5;
+        public static int TextY = 5;
+
+        public void InitializeConfig(IModConfig config)
+        {
+            // Pull the values from the JSON, or auto-generate them if they don't exist
+            ShowText = config.GetBool("ShowText", true);
+            TextX = config.GetInt("TextXPosition", 5);
+            TextY = config.GetInt("TextYPosition", 5);
+        }
+
+        public void Start()
+        {
+            _harmony = new Harmony(ID);
+            _harmony.PatchAll();
+        }
+
+        public void Stop()
+        {
+            // Instantly disables all harmony patches made by this mod
+            _harmony?.UnpatchAll(_harmony.Id);
+        }
+    }
+
+    // A test patch!
+    [HarmonyPatch(typeof(MainMenu), "DrawMainMenu")]
+    public static class MainMenu_VisualTest_Patch
+    {
+        static void Postfix(RenderContext render)
+        {
+            // 1. Check the bool setting
+            if (!ModEntry.ShowText) return;
+
+            // 2. Use the int settings for the position
+            render.UiBatch.DrawText(
+                11,
+                "Template Config Mod is Active!",
+                new Vector2(ModEntry.TextX, ModEntry.TextY),
                 new DrawInfo(0.05f)
                 {
                     Color = Palette.Colors[6]
@@ -151,4 +225,4 @@ namespace ModTemplate
 Interested in seeing further development in modding? Have questions and/or concerns? Join the modding [Discord](https://discord.gg/BzgPQgw2nD)!
 ### Support Us...
 Enjoy the work we do on **[Wayfinder](https://github.com/Echoviax/wayfinder)** and **Neverway** mods?  
-We have a [Ko-Fi](https://ko-fi.com//Echoviax)! There is no obligation to donate.
+We have a [Ko-Fi](https://ko-fi.com//Echoviax)! There is no obligation to donate, but it would be greatly appreciated.
