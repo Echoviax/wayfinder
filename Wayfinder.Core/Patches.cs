@@ -23,7 +23,7 @@ namespace Wayfinder.Patches
 
             render.UiBatch.DrawText(
                 11,
-                "Wayfinder v0.3.1",
+                "Wayfinder v0.3.2",
                 customTextPosition,
                 new DrawInfo(Palette.Colors[2] * ____menuFadeDelta, 0.6f)
                 {

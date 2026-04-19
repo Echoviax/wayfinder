@@ -12,10 +12,12 @@ namespace Wayfinder.Core
     {
         public IWayfinderMod Mod { get; }
         public bool IsEnabled { get; set; }
+        public ModConfig Config { get; }
 
-        public ModInstance(IWayfinderMod mod, bool isEnabled)
+        public ModInstance(IWayfinderMod mod, ModConfig config, bool isEnabled)
         {
             Mod = mod;
+            Config = config;
             IsEnabled = isEnabled;
         }
     }
@@ -25,9 +27,9 @@ namespace Wayfinder.Core
         public static List<ModInstance> LoadedMods { get; } = new List<ModInstance>();
 
         private static string logFilePath = "";
-        private static string configFilePath = "";
+        private static string masterConfigFilePath = "";
+        private static string configsDirectory = "";
 
-        // Dictionary to track the saved state of each mod by its Name
         private static Dictionary<string, bool> modStates = new Dictionary<string, bool>();
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -50,15 +52,16 @@ namespace Wayfinder.Core
             string exePath = Path.GetFullPath(Path.Combine(wayfinderFolder, ".."));
             string modsDirectory = Path.Combine(exePath, "Mods");
 
+            configsDirectory = Path.Combine(modsDirectory, "Configs");
             logFilePath = Path.Combine(exePath, "Wayfinder_Log.txt");
-            configFilePath = Path.Combine(Path.Combine(exePath, "Mods"), "Wayfinder_Config.json");
+            masterConfigFilePath = Path.Combine(configsDirectory, "Wayfinder_Config.json");
 
             File.WriteAllText(logFilePath, $"--- Wayfinder Started at {DateTime.Now} ---\n");
 
             LogInfo("Initializing Wayfinder...");
 
             ApplyCorePatches();
-            LoadConfig();
+            LoadMasterConfig();
 
             if (!Directory.Exists(modsDirectory))
             {
@@ -66,6 +69,9 @@ namespace Wayfinder.Core
                 LogWarning("Mods directory not found. Created 'Mods' folder.");
                 return;
             }
+
+            if (!Directory.Exists(configsDirectory))
+                Directory.CreateDirectory(configsDirectory);
 
             string[] modFiles = Directory.GetFiles(modsDirectory, "*.dll");
             LogInfo($"Found {modFiles.Length} potential mod(s) in directory.");
@@ -84,33 +90,33 @@ namespace Wayfinder.Core
             }
         }
 
-        private static void LoadConfig()
+        private static void LoadMasterConfig()
         {
-            if (File.Exists(configFilePath))
+            if (File.Exists(masterConfigFilePath))
             {
                 try
                 {
-                    string json = File.ReadAllText(configFilePath);
+                    string json = File.ReadAllText(masterConfigFilePath);
                     modStates = JsonSerializer.Deserialize<Dictionary<string, bool>>(json) ?? new Dictionary<string, bool>();
                 }
                 catch (Exception ex)
                 {
-                    LogWarning($"Failed to load config, creating a new one. {ex.Message}");
+                    LogWarning($"Failed to load master config, creating a new one. {ex.Message}");
                     modStates = new Dictionary<string, bool>();
                 }
             }
         }
 
-        private static void SaveConfig()
+        private static void SaveMasterConfig()
         {
             try
             {
                 string json = JsonSerializer.Serialize(modStates, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(configFilePath, json);
+                File.WriteAllText(masterConfigFilePath, json);
             }
             catch (Exception ex)
             {
-                LogError($"Failed to save config: {ex.Message}");
+                LogError($"Failed to save master config: {ex.Message}");
             }
         }
 
@@ -145,30 +151,35 @@ namespace Wayfinder.Core
                 {
                     if (Activator.CreateInstance((Type)type) is IWayfinderMod modInstance)
                     {
+                        string safeID = string.Join("_", modInstance.ID.Split(Path.GetInvalidFileNameChars()));
+                        string modConfigPath = Path.Combine(configsDirectory, $"{safeID}.json"); ModConfig modConfig = ModConfig.Load(modConfigPath);
+
+                        // Config!
+                        if (modInstance is IConfigurableMod configMod)
+                            configMod.InitializeConfig(modConfig);
+
                         // Saved state
                         bool shouldBeEnabled = true;
-                        if (modStates.TryGetValue(modInstance.Name, out bool savedState))
-                        {
+                        if (modStates.TryGetValue(modInstance.ID, out bool savedState))
                             shouldBeEnabled = savedState;
-                        }
                         else
                         {
                             // First time seeing this mod
-                            modStates[modInstance.Name] = true;
-                            SaveConfig();
+                            modStates[modInstance.ID] = true;
+                            SaveMasterConfig();
                         }
 
                         if (shouldBeEnabled)
                         {
                             LogInfo($"Starting mod: {modInstance.Name} v{modInstance.Version} by {modInstance.Author}");
                             modInstance.Start();
-                            LoadedMods.Add(new ModInstance(modInstance, true));
+                            LoadedMods.Add(new ModInstance(modInstance, modConfig, true));
                             LogSuccess($"Successfully loaded and enabled {modInstance.Name}.");
                         }
                         else
                         {
                             LogInfo($"Registered mod (disabled in config): {modInstance.Name} v{modInstance.Version}");
-                            LoadedMods.Add(new ModInstance(modInstance, false));
+                            LoadedMods.Add(new ModInstance(modInstance, modConfig, false));
                         }
                     }
                 }
@@ -196,8 +207,8 @@ namespace Wayfinder.Core
                     mod.IsEnabled = true;
                 }
 
-                modStates[mod.Mod.Name] = mod.IsEnabled;
-                SaveConfig();
+                modStates[mod.Mod.ID] = mod.IsEnabled;
+                SaveMasterConfig();
             }
             catch (Exception ex)
             {
