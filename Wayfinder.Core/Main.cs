@@ -2,7 +2,7 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
-using System.Text.Json; // Added for saving/loading
+using System.Text.Json;
 using HarmonyLib;
 using Wayfinder.API;
 
@@ -10,10 +10,10 @@ namespace Wayfinder.Core
 {
     public class ModInstance
     {
-        public API.IWayfinderMod Mod { get; }
+        public IWayfinderMod Mod { get; }
         public bool IsEnabled { get; set; }
 
-        public ModInstance(API.IWayfinderMod mod, bool isEnabled)
+        public ModInstance(IWayfinderMod mod, bool isEnabled)
         {
             Mod = mod;
             IsEnabled = isEnabled;
@@ -143,7 +143,7 @@ namespace Wayfinder.Core
             {
                 try
                 {
-                    if (Activator.CreateInstance(type) is IWayfinderMod modInstance)
+                    if (Activator.CreateInstance((Type)type) is IWayfinderMod modInstance)
                     {
                         // Saved state
                         bool shouldBeEnabled = true;
