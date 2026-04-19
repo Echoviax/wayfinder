@@ -1,6 +1,5 @@
 ﻿using Bang.Entities;
 using Bang.StateMachines;
-using FMOD;
 using HarmonyLib;
 using Murder;
 using Murder.Core.Geometry;
@@ -31,12 +30,12 @@ namespace Wayfinder.UI
 
         private float _menuOpenTime;
         private float _lastSettingChangeTime;
-        private float _lastTabChangeTime;
         private float _quitTime;
-
-        private float _tabExtraWidth;
         private float _totalTabsWidth;
-        private int _tabSpacing;
+
+        private Core.ModInstance _viewingConfigFor = null;
+        private List<string> _currentConfigKeys = new List<string>();
+        private List<string> _currentConfigTypes = new List<string>();
 
         public WayfinderModMenuStateMachine()
         {
@@ -79,22 +78,76 @@ namespace Wayfinder.UI
                         _optionsMenu.Select(1, Game.NowUnscaled);
                     else if (_optionsMenu.Selection == _optionsMenu.Length - 1)
                         quit = true;
+                    else if (_viewingConfigFor == null)
+                    {
+                        var loadedMods = Core.LoaderCore.LoadedMods;
+                        if (_optionsMenu.Selection >= 1 && _optionsMenu.Selection <= loadedMods.Count)
+                        {
+                            SoundServices.Play(sounds.MainMenu.Menu.MenuSubmit);
+                            _viewingConfigFor = loadedMods[_optionsMenu.Selection - 1];
+                            UpdateMenuOptions();
+                            _optionsMenu.Select(1, Game.NowUnscaled);
+                        }
+                    }
                     else
-                        pressedValue.X = 1;
+                        pressedValue.X = 1; // simulate right click on enter in a submenu. Might remove, depends on testing
                 }
 
                 if (pressedValue.X != 0)
                 {
-                    var loadedMods = Core.LoaderCore.LoadedMods;
+                    _lastSettingChangeTime = Game.NowUnscaled;
+                    SoundServices.Play(sounds.BaseMenu.SelectionChange);
 
-                    if (_optionsMenu.Selection >= 1 && _optionsMenu.Selection <= loadedMods.Count)
+                    if (_viewingConfigFor == null)
                     {
-                        _lastSettingChangeTime = Game.NowUnscaled;
-                        SoundServices.Play(sounds.BaseMenu.SelectionChange);
-                        var targetMod = loadedMods[_optionsMenu.Selection - 1];
-                        Core.LoaderCore.ToggleMod(targetMod);
+                        var loadedMods = Core.LoaderCore.LoadedMods;
+                        if (_optionsMenu.Selection >= 1 && _optionsMenu.Selection <= loadedMods.Count)
+                        {
+                            var targetMod = loadedMods[_optionsMenu.Selection - 1];
+                            Core.LoaderCore.ToggleMod(targetMod);
 
-                        _optionsMenu.Options[_optionsMenu.Selection].Check = targetMod.IsEnabled;
+                            _optionsMenu.Options[_optionsMenu.Selection].Check = targetMod.IsEnabled;
+                        }
+
+                    }
+                    else
+                    {
+                        int dataIndex = _optionsMenu.Selection - 1;
+                        if (dataIndex >= 0 && dataIndex < _currentConfigKeys.Count)
+                        {
+                            string key = _currentConfigKeys[dataIndex];
+                            string type = _currentConfigTypes[dataIndex];
+                            var config = _viewingConfigFor.Config;
+                            var oldData = _optionsMenu.Options[_optionsMenu.Selection];
+
+                            if (type == "bool")
+                            {
+                                bool val = config.BoolSettings[key];
+                                config.SetBool(key, !val);
+                                _optionsMenu.Options[_optionsMenu.Selection].Check = !val;
+                            }
+                            else if (type == "int")
+                            {
+                                int val = config.IntSettings[key];
+                                val += pressedValue.X;
+                                config.SetInt(key, val);
+
+                                _optionsMenu.Options[_optionsMenu.Selection].Setting = val.ToString();
+                            }
+                            else if (type == "float")
+                            {
+                                float val = config.FloatSettings[key];
+                                val += pressedValue.X * 0.1f;
+                                val = (float)Math.Round(val, 2);
+                                config.SetFloat(key, val);
+
+                                _optionsMenu.Options[_optionsMenu.Selection].Setting = val.ToString("0.0");
+                            }
+
+                            // feed update to the mod
+                            if (_viewingConfigFor.Mod is API.IConfigurableMod liveUpdateMod)
+                                liveUpdateMod.InitializeConfig(config);
+                        }
                     }
                 }
 
@@ -102,13 +155,24 @@ namespace Wayfinder.UI
                 if (quit || Game.Input.PressedAndConsume(106))
                 {
                     SoundServices.Play(sounds.MainMenu.Back);
-                    _quitTime = Game.NowUnscaled;
 
-                    float waitStartTime = Game.NowUnscaled;
-                    while (Game.NowUnscaled - waitStartTime < 0.15f)
-                        yield return Wait.NextFrame;
-
-                    break;
+                    if (_viewingConfigFor != null)
+                    {
+                        // back to mod list
+                        quit = false;
+                        _viewingConfigFor = null;
+                        UpdateMenuOptions();
+                        _optionsMenu.Select(1, Game.NowUnscaled);
+                    }
+                    else
+                    {
+                        // quit the mod menu
+                        _quitTime = Game.NowUnscaled;
+                        float waitStartTime = Game.NowUnscaled;
+                        while (Game.NowUnscaled - waitStartTime < 0.15f)
+                            yield return Wait.NextFrame;
+                        break;
+                    }
                 }
             }
 
@@ -129,41 +193,86 @@ namespace Wayfinder.UI
         private void UpdateMenuOptions()
         {
             int currentSelection = _optionsMenu.Options != null ? _optionsMenu.Selection : 1;
-            var loadedMods = Core.LoaderCore.LoadedMods;
-            var optionsArray = new OptionsStateMachine.OptionsData[loadedMods.Count == 0 ? 3 : loadedMods.Count + 2];
 
-            // empty for tab list
-            optionsArray[0] = default;
-
-            if (loadedMods.Count == 0)
+            if (_viewingConfigFor == null)
             {
-                optionsArray[1] = new OptionsStateMachine.OptionsData("No mods loaded")
+                _tabsMenu = new MenuInfo(new MenuOption("Wayfinder Mods"));
+                var loadedMods = Core.LoaderCore.LoadedMods;
+                var optionsArray = new OptionsStateMachine.OptionsData[loadedMods.Count == 0 ? 3 : loadedMods.Count + 2];
+                optionsArray[0] = default;
+
+                if (loadedMods.Count == 0)
+                    optionsArray[1] = new OptionsStateMachine.OptionsData("No mods loaded") { Tooltip = "Check your 'Mods' folder." };
+                else
                 {
-                    Tooltip = "Check your 'Mods' folder."
-                };
+                    for (int i = 0; i < loadedMods.Count; i++)
+                    {
+                        var mod = loadedMods[i];
+                        optionsArray[i + 1] = new OptionsStateMachine.OptionsData(mod.Mod.Name)
+                        {
+                            Check = mod.IsEnabled,
+                            Tooltip = $"{(string.IsNullOrEmpty(mod.Mod.Description) ? "No description." : mod.Mod.Description)}{(mod.Mod is API.IConfigurableMod ? "\n\nPress Enter to configure." : "")}"
+                        };
+                    }
+                }
+                optionsArray[^1] = default;
+                _optionsMenu = new GenericMenuInfo<OptionsStateMachine.OptionsData>(optionsArray) { Sounds = LibraryServices.GetUiSoundDatabase().BaseMenu };
             }
             else
             {
-                for (int i = 0; i < loadedMods.Count; i++)
+                _tabsMenu = new MenuInfo(new MenuOption($"{_viewingConfigFor.Mod.Name} Config"));
+                _currentConfigKeys.Clear();
+                _currentConfigTypes.Clear();
+
+                var config = _viewingConfigFor.Config;
+                int settingCount = config.BoolSettings.Count + config.IntSettings.Count;
+
+                var optionsArray = new OptionsStateMachine.OptionsData[settingCount == 0 ? 3 : settingCount + 2];
+                optionsArray[0] = default;
+
+                if (settingCount == 0)
                 {
-                    var mod = loadedMods[i];
-                    optionsArray[i + 1] = new OptionsStateMachine.OptionsData(loadedMods[i].Mod.Name)
-                    {
-                        Check = mod.IsEnabled,
-                        Tooltip = mod.Mod.Description ?? "No mod description provided"
-                    };
+                    optionsArray[1] = new OptionsStateMachine.OptionsData("No settings available.") { Tooltip = "This mod does not have a config file." };
                 }
+                else
+                {
+                    int index = 1;
+
+                    foreach (var kvp in config.BoolSettings)
+                    {
+                        optionsArray[index] = new OptionsStateMachine.OptionsData(kvp.Key) { Check = kvp.Value };
+                        _currentConfigKeys.Add(kvp.Key);
+                        _currentConfigTypes.Add("bool");
+                        index++;
+                    }
+
+                    foreach (var kvp in config.IntSettings)
+                    {
+                        optionsArray[index] = new OptionsStateMachine.OptionsData(kvp.Key)
+                        {
+                            Setting = kvp.Value.ToString()
+                        };
+                        _currentConfigKeys.Add(kvp.Key);
+                        _currentConfigTypes.Add("int");
+                        index++;
+                    }
+
+                    foreach (var kvp in config.FloatSettings)
+                    {
+                        optionsArray[index] = new OptionsStateMachine.OptionsData(kvp.Key)
+                        {
+                            Setting = kvp.Value.ToString("0.0")
+                        };
+                        _currentConfigKeys.Add(kvp.Key);
+                        _currentConfigTypes.Add("float");
+                        index++;
+                    }
+                }
+
+                optionsArray[^1] = default;
+                _optionsMenu = new GenericMenuInfo<OptionsStateMachine.OptionsData>(optionsArray) { Sounds = LibraryServices.GetUiSoundDatabase().BaseMenu };
             }
 
-            // empty for back arrow
-            optionsArray[^1] = default;
-
-            _optionsMenu = new GenericMenuInfo<OptionsStateMachine.OptionsData>(optionsArray)
-            {
-                Sounds = LibraryServices.GetUiSoundDatabase().BaseMenu
-            };
-
-            // in case menu reloads while open for whatever reason
             if (currentSelection >= _optionsMenu.Length - 1)
                 currentSelection = 1;
 
@@ -174,52 +283,36 @@ namespace Wayfinder.UI
         {
             int fontHeight = RoadFonts.PixelFont.GetFontHeight();
             Vector2 screenCenter = render.Camera.Size / 2f;
-            UiSkinAsset uiSkin = LibraryServices.GetUiSkin(); // theme
+            UiSkinAsset uiSkin = LibraryServices.GetUiSkin();
 
-            // options container size
-            Vector2 menuContainerSize = new Vector2(180f + _tabExtraWidth, 140f);
-
-            int currentTabXOffset = 0;
-            if (_totalTabsWidth == 0f && _tabsMenu.Length > 0)
+            _totalTabsWidth = 0f;
+            if (_tabsMenu.Length > 0)
             {
                 for (int i = 0; i < _tabsMenu.Length; i++)
                     _totalTabsWidth += RoadFonts.LargeFont.GetLineWidth(_tabsMenu.GetOptionText(i));
-
-                if (_totalTabsWidth >= menuContainerSize.X - 20f)
-                {
-                    _tabExtraWidth = 24f;
-                    menuContainerSize.X += _tabExtraWidth;
-                }
-                _tabSpacing = Calculator.RoundToInt((menuContainerSize.X - _totalTabsWidth) / Math.Max(1, (float)_tabsMenu.Length - 1f));
             }
+
+            // expand the menu container if the config title is long
+            Vector2 menuContainerSize = new Vector2(Math.Max(180f, _totalTabsWidth + 40f), 140f);
 
             float quitTransitionProgress = Calculator.ClampTime(_quitTime, Game.NowUnscaled, 0.1f);
             float openTransitionEased = Ease.CubeIn(Calculator.ClampTime(_menuOpenTime, Game.NowUnscaled, 0.25f));
             float yOffsetAnimation = 20f * Ease.CubeIn(1f - openTransitionEased);
 
-            // If quitting, add to the Y offset so it drops down
             if (Game.NowUnscaled - _quitTime < 1f)
                 yOffsetAnimation += quitTransitionProgress * 20f;
 
             Color shadowColor = uiSkin.MainMenuStyle.Shadow;
             Color accentColor = Palette.Colors[5];
-            float tabSwitchProgress = Calculator.ClampTime(Game.NowUnscaled - _lastTabChangeTime, 0.15f);
 
             Vector2 tabsBasePosition = screenCenter + new Vector2((0f - menuContainerSize.X) / 2f, yOffsetAnimation + 5f);
 
-            // Draw tabs... which is pointless... for now?
-            for (int j = 0; j < _tabsMenu.Length; j++)
+            // draw tab title
+            render.UiBatch.DrawText(12, _tabsMenu.GetOptionText(0), tabsBasePosition, new DrawInfo(0.15f)
             {
-                bool isSelectedTab = _tabsMenu.Selection == j;
-                string optionText = _tabsMenu.GetOptionText(j);
-                float tabYOffset = isSelectedTab ? (1f - Ease.CubeIn(tabSwitchProgress)) : 0f;
-
-                currentTabXOffset += render.UiBatch.DrawText(12, optionText, tabsBasePosition + new Vector2(currentTabXOffset, tabYOffset), new DrawInfo(0.15f)
-                {
-                    Color = (isSelectedTab ? Palette.Colors[6] : uiSkin.MainMenuStyle.Color) * openTransitionEased,
-                    Shadow = shadowColor * openTransitionEased
-                }).X + _tabSpacing;
-            }
+                Color = Palette.Colors[6] * openTransitionEased,
+                Shadow = shadowColor * openTransitionEased
+            });
 
             float cursorMoveProgress = Calculator.ClampTime(Game.NowUnscaled - _optionsMenu.LastMoved, 0.15f);
             float settingChangeProgress = Calculator.ClampTime(_lastSettingChangeTime, Game.NowUnscaled, 0.15f);
@@ -267,6 +360,38 @@ namespace Wayfinder.UI
                     });
                 }
 
+                // numerical things
+                else if (optionsData.Setting != null)
+                {
+                    string settingText = optionsData.Setting;
+
+                    // shifts the text left by 8px to make room for the right arrow
+                    Vector2 textPosition = optionsBasePosition + new Vector2(menuContainerSize.X - 8f, (float)currentOptionYOffset + checkboxBounceOffset);
+
+                    Point textSize = render.UiBatch.DrawText(11, settingText, textPosition, new DrawInfo(0.8f)
+                    {
+                        Color = (isSelectedOption ? accentColor : uiSkin.MainMenuStyle.Color) * openTransitionEased,
+                        Shadow = uiSkin.MainMenuStyle.Shadow * openTransitionEased,
+                        Origin = new Vector2(1f, 0f)
+                    });
+
+                    // draw arrows on hover
+                    if (isSelectedOption)
+                    {
+                        float arrowSlide = 1f - Ease.CubeOut(cursorMoveProgress);
+
+                        render.UiBatch.DrawSprite(uiSkin.ScrollArrow, optionsBasePosition + new Vector2(menuContainerSize.X - 16f - (float)textSize.X - arrowSlide + settingChangeProgress, currentOptionYOffset + checkboxYAdjust), new DrawInfo(0.8f)
+                        {
+                            ImageFlip = ImageFlip.Horizontal
+                        }, new AnimationInfo("right"));
+
+                        render.UiBatch.DrawSprite(uiSkin.ScrollArrow, optionsBasePosition + new Vector2(menuContainerSize.X + arrowSlide + settingChangeProgress, currentOptionYOffset + checkboxYAdjust), new DrawInfo(0.8f)
+                        {
+                            ImageFlip = ImageFlip.None
+                        }, new AnimationInfo("right"));
+                    }
+                }
+
                 // little info boxes!
                 if (isSelectedOption && !string.IsNullOrEmpty(optionsData.Tooltip))
                 {
@@ -290,7 +415,6 @@ namespace Wayfinder.UI
                 Vector2 targetCursorPos = selectedOptionPosition + new Vector2(-6f, 2f);
                 Vector2 currentCursorPos = Vector2.Lerp(previousCursorPos, targetCursorPos, Ease.Evaluate(cursorMoveProgress, EaseKind.BackOut));
 
-                // This is the line creating the bounce when toggling settings
                 currentCursorPos.X += 2f - 2f * Ease.BounceInOut(settingChangeProgress);
 
                 render.UiBatch.DrawPortrait(uiSkin.MainMenu.HandCursor, currentCursorPos, new DrawInfo(0.25f)
