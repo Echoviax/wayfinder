@@ -10,6 +10,7 @@ namespace ModTemplate
 {
     public class ModEntry : IWayfinderMod
     {
+        public string ID => "com.yourname.templatemod";
         public string Name => "Template Mod";
         public string Description => "A simple mod to test the Wayfinder API.";
         public string Version => "1.0.0";
@@ -19,7 +20,7 @@ namespace ModTemplate
 
         public void Start()
         {
-            _harmony = new Harmony("com.yourname.templatemod");
+            _harmony = new Harmony(ID);
             _harmony.PatchAll();
         }
 
@@ -38,10 +39,10 @@ namespace ModTemplate
         {
             // Draw text in the top-left corner of the screen
             render.UiBatch.DrawText(
-                11, // The engine's standard Pixel Font ID
+                11,
                 "Template Mod is Active!",
-                new Vector2(5, 5),
-                new DrawInfo(0.05f) // Draw at 0.05f depth so it sits cleanly on top of the UI
+                new Vector2(5, 20),
+                new DrawInfo(0.05f)
                 {
                     Color = Palette.Colors[6]
                 }
