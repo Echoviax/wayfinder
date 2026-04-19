@@ -37,6 +37,8 @@ namespace Wayfinder.Patches
     [HarmonyPatch(typeof(MainMenu), "GetMainMenuOptions")]
     public static class MainMenu_AddModsOption_Patch
     {
+        public static MenuOption[] TrackedMainMenuOptions = null;
+
         static void Postfix(MainMenu __instance, ref MenuInfo __result)
         {
             var oldOptions = __result.Options;
@@ -48,6 +50,8 @@ namespace Wayfinder.Patches
             newOptions[3] = oldOptions[2];
 
             __result = new MenuInfo(newOptions) { Sounds = __result.Sounds };
+
+            TrackedMainMenuOptions = newOptions;
 
             Traverse.Create(__instance).Field("_connectTimes").SetValue(new float[newOptions.Length]);
             Traverse.Create(__instance).Field("_disconnectTimes").SetValue(new float[newOptions.Length]);
@@ -84,7 +88,9 @@ namespace Wayfinder.Patches
 
         static bool Prefix([HarmonyArgument(0)] ref MenuInfo info)
         {
-            if (WayfinderMenuManager.IsWayfinderMenuOpen && info.Length == 4)
+            bool isMainMenu = info.Options != null && info.Options == MainMenu_AddModsOption_Patch.TrackedMainMenuOptions;
+
+            if (WayfinderMenuManager.IsWayfinderMenuOpen && isMainMenu)
                 return false;
 
             return true;
@@ -92,7 +98,9 @@ namespace Wayfinder.Patches
 
         static void Postfix([HarmonyArgument(0)] ref MenuInfo info, ref bool __result)
         {
-            if (info.Length == 4)
+            bool isMainMenu = info.Options != null && info.Options == MainMenu_AddModsOption_Patch.TrackedMainMenuOptions;
+
+            if (isMainMenu)
             {
                 if (__result)
                 {
