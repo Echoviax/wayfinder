@@ -2,6 +2,7 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
+using System.Text;
 using System.Text.Json;
 using HarmonyLib;
 using Wayfinder.API;
@@ -38,15 +39,6 @@ namespace Wayfinder.Core
 
         public static void Initialize()
         {
-            try
-            {
-                AllocConsole();
-                var writer = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
-                Console.SetOut(writer);
-                Console.Title = "Wayfinder - Debug Terminal";
-            }
-            catch { }
-
             string coreAssemblyPath = Assembly.GetExecutingAssembly().Location;
             string wayfinderFolder = Path.GetDirectoryName(coreAssemblyPath)!;
             string exePath = Path.GetFullPath(Path.Combine(wayfinderFolder, ".."));
@@ -58,6 +50,18 @@ namespace Wayfinder.Core
 
             File.WriteAllText(logFilePath, $"--- Wayfinder Started at {DateTime.Now} ---\n");
 
+            try
+            {
+                AllocConsole();
+                var writer = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
+                Console.SetOut(writer);
+                Console.Title = "Wayfinder - Debug Terminal";
+            }
+            catch { }
+
+            // intercepts console output to the log
+            Console.SetOut(new ConsoleToFileWriter(Console.Out, logFilePath));
+
             LogInfo("Initializing Wayfinder...");
 
             ApplyCorePatches();
@@ -66,7 +70,7 @@ namespace Wayfinder.Core
             if (!Directory.Exists(modsDirectory))
             {
                 Directory.CreateDirectory(modsDirectory);
-                LogWarning("Mods directory not found. Created 'Mods' folder.");
+                LogWarning("Mods directory not found. Created 'Mods' folder");
                 return;
             }
 
@@ -76,17 +80,148 @@ namespace Wayfinder.Core
             string[] modFiles = Directory.GetFiles(modsDirectory, "*.dll");
             LogInfo($"Found {modFiles.Length} potential mod(s) in directory.");
 
+            List<IWayfinderMod> discoveredMods = new List<IWayfinderMod>();
+
             foreach (string modFile in modFiles)
             {
                 try
                 {
                     Assembly modAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(modFile);
-                    StartMod(modAssembly);
+                    var modTypes = modAssembly.GetTypes().Where(t => typeof(IWayfinderMod).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract).ToList();
+
+                    if (modTypes.Count == 0)
+                    {
+                        LogWarning($"Skipping {modAssembly.GetName().Name}, no IWayfinderMod implementation found.");
+                        continue;
+                    }
+
+                    foreach (var type in modTypes)
+                    {
+                        if (Activator.CreateInstance(type) is IWayfinderMod modInstance)
+                        {
+                            if (modInstance is WayfinderMod baseMod)
+                                baseMod.ModDirectory = Path.GetDirectoryName(modAssembly.Location) ?? modsDirectory;
+                            discoveredMods.Add(modInstance);
+                        }
+                    }
                 }
                 catch (Exception ex)
                 {
-                    LogError($"Failed to load {Path.GetFileName(modFile)}: {ex.Message}");
+                    LogError($"Failed to read {Path.GetFileName(modFile)}: {ex.Message}");
                 }
+            }
+
+            // sort by dependencies
+            List<IWayfinderMod> sortedMods = SortDependencies(discoveredMods);
+
+            // start them all
+            foreach (var modInstance in sortedMods)
+            {
+                try
+                {
+                    string safeID = string.Join("_", modInstance.ID.Split(Path.GetInvalidFileNameChars()));
+                    string modConfigPath = Path.Combine(configsDirectory, $"{safeID}.json");
+                    ModConfig modConfig = ModConfig.Load(modConfigPath);
+
+                    if (modInstance is WayfinderMod baseMod)
+                        baseMod.Config = modConfig;
+                    else if (modInstance is IConfigurableMod configMod) // fallback for older mods
+                        configMod.InitializeConfig(modConfig);
+
+                    // Saved state
+                    bool shouldBeEnabled = true;
+                    if (modStates.TryGetValue(modInstance.ID, out bool savedState))
+                        shouldBeEnabled = savedState;
+                    else
+                    {
+                        // First time seeing this mod
+                        modStates[modInstance.ID] = true;
+                        SaveMasterConfig();
+                    }
+
+                    if (shouldBeEnabled)
+                    {
+                        LogInfo($"Starting mod: {modInstance.Name} v{modInstance.Version} by {modInstance.Author}");
+                        modInstance.Start();
+                        LoadedMods.Add(new ModInstance(modInstance, modConfig, true));
+                        LogSuccess($"Successfully loaded and enabled {modInstance.Name}.");
+                    }
+                    else
+                    {
+                        LogInfo($"Registered mod (disabled in config): {modInstance.Name} v{modInstance.Version}");
+                        LoadedMods.Add(new ModInstance(modInstance, modConfig, false));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogError($"Error starting mod {modInstance.Name}: {ex.Message}");
+                }
+            }
+        }
+
+        private static List<IWayfinderMod> SortDependencies(List<IWayfinderMod> unsortedMods)
+        {
+            var sorted = new List<IWayfinderMod>();
+            var visited = new HashSet<string>();
+            var visiting = new HashSet<string>();
+
+            void Visit(IWayfinderMod mod)
+            {
+                if (visited.Contains(mod.ID)) return; // already checked it
+
+                if (visiting.Contains(mod.ID)) // same id, circular
+                {
+                    LogError($"Circular dependency detected involving {mod.ID}! Skipping loading, please contact the mod developer");
+                    return;
+                }
+
+                visiting.Add(mod.ID);
+
+                var dependencies = mod.GetType().GetCustomAttributes(typeof(WayfinderDependencyAttribute), true).Cast<WayfinderDependencyAttribute>();
+
+                foreach (var dep in dependencies)
+                {
+                    var depMod = unsortedMods.FirstOrDefault(m => m.ID == dep.DependencyID);
+                    if (depMod != null)
+                        Visit(depMod);
+                    else
+                        LogWarning($"Mod '{mod.ID}' is missing dependency '{dep.DependencyID}'! It might crash or malfunction");
+                }
+
+                visiting.Remove(mod.ID);
+                visited.Add(mod.ID);
+                sorted.Add(mod);
+            }
+
+            foreach (var mod in unsortedMods)
+                Visit(mod);
+
+            return sorted;
+        }
+
+        public static void ToggleMod(ModInstance mod)
+        {
+            try
+            {
+                if (mod.IsEnabled)
+                {
+                    LogInfo($"Stopping mod: {mod.Mod.Name}");
+                    mod.Mod.Stop();
+                    mod.IsEnabled = false;
+                }
+                else
+                {
+                    LogInfo($"Starting mod: {mod.Mod.Name}");
+                    mod.Mod.Start();
+                    mod.IsEnabled = true;
+                }
+
+                modStates[mod.Mod.ID] = mod.IsEnabled;
+                SaveMasterConfig();
+            }
+            catch (Exception ex)
+            {
+                LogError($"Failed to toggle {mod.Mod.Name}: {ex.Message}");
             }
         }
 
@@ -125,7 +260,6 @@ namespace Wayfinder.Core
             try
             {
                 var harmony = new Harmony("com.echoviax.wayfinder.core");
-
                 harmony.PatchAll();
                 LogSuccess("Core patches applied successfully!");
             }
@@ -135,89 +269,7 @@ namespace Wayfinder.Core
             }
         }
 
-        private static void StartMod(Assembly modAssembly)
-        {
-            var modTypes = modAssembly.GetTypes().Where(t => typeof(IWayfinderMod).IsAssignableFrom(t) && !t.IsInterface && !t.IsAbstract).ToList();
-
-            if (modTypes.Count == 0)
-            {
-                LogWarning($"Skipping {modAssembly.GetName().Name}, no IWayfinderMod implementation found.");
-                return;
-            }
-
-            foreach (var type in modTypes)
-            {
-                try
-                {
-                    if (Activator.CreateInstance((Type)type) is IWayfinderMod modInstance)
-                    {
-                        string safeID = string.Join("_", modInstance.ID.Split(Path.GetInvalidFileNameChars()));
-                        string modConfigPath = Path.Combine(configsDirectory, $"{safeID}.json"); ModConfig modConfig = ModConfig.Load(modConfigPath);
-
-                        // Config!
-                        if (modInstance is IConfigurableMod configMod)
-                            configMod.InitializeConfig(modConfig);
-
-                        // Saved state
-                        bool shouldBeEnabled = true;
-                        if (modStates.TryGetValue(modInstance.ID, out bool savedState))
-                            shouldBeEnabled = savedState;
-                        else
-                        {
-                            // First time seeing this mod
-                            modStates[modInstance.ID] = true;
-                            SaveMasterConfig();
-                        }
-
-                        if (shouldBeEnabled)
-                        {
-                            LogInfo($"Starting mod: {modInstance.Name} v{modInstance.Version} by {modInstance.Author}");
-                            modInstance.Start();
-                            LoadedMods.Add(new ModInstance(modInstance, modConfig, true));
-                            LogSuccess($"Successfully loaded and enabled {modInstance.Name}.");
-                        }
-                        else
-                        {
-                            LogInfo($"Registered mod (disabled in config): {modInstance.Name} v{modInstance.Version}");
-                            LoadedMods.Add(new ModInstance(modInstance, modConfig, false));
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    LogError($"Error starting mod class {type.Name}: {ex.Message}");
-                }
-            }
-        }
-
-        public static void ToggleMod(ModInstance mod)
-        {
-            try
-            {
-                if (mod.IsEnabled)
-                {
-                    LogInfo($"Stopping mod: {mod.Mod.Name}");
-                    mod.Mod.Stop();
-                    mod.IsEnabled = false;
-                }
-                else
-                {
-                    LogInfo($"Starting mod: {mod.Mod.Name}");
-                    mod.Mod.Start();
-                    mod.IsEnabled = true;
-                }
-
-                modStates[mod.Mod.ID] = mod.IsEnabled;
-                SaveMasterConfig();
-            }
-            catch (Exception ex)
-            {
-                LogError($"Failed to toggle {mod.Mod.Name}: {ex.Message}");
-            }
-        }
-
         #region Specialized Logging Functions
-
         public static void LogInfo(string message) => WriteLog("INFO", message, ConsoleColor.White);
         public static void LogSuccess(string message) => WriteLog("OKAY", message, ConsoleColor.Green);
         public static void LogWarning(string message) => WriteLog("WARN", message, ConsoleColor.Yellow);
@@ -237,14 +289,43 @@ namespace Wayfinder.Core
             Console.ForegroundColor = color;
             Console.WriteLine(formattedMessage);
             Console.ResetColor();
-
-            try
-            {
-                File.AppendAllText(logFilePath, formattedMessage + Environment.NewLine);
-            }
-            catch { }
         }
-
         #endregion
+
+        private class ConsoleToFileWriter : TextWriter
+        {
+            private readonly TextWriter _originalOut;
+            private readonly string _logPath;
+
+            public ConsoleToFileWriter(TextWriter originalOut, string logPath)
+            {
+                _originalOut = originalOut;
+                _logPath = logPath;
+            }
+
+            public override Encoding Encoding => _originalOut.Encoding;
+
+            public override void Write(string? value)
+            {
+                _originalOut.Write(value);
+                AppendToFile(value);
+            }
+
+            public override void WriteLine(string? value)
+            {
+                _originalOut.WriteLine(value);
+                AppendToFile(value + Environment.NewLine);
+            }
+
+            private void AppendToFile(string? text)
+            {
+                if (string.IsNullOrEmpty(text)) return;
+                try
+                {
+                    File.AppendAllText(_logPath, text);
+                }
+                catch { }
+            }
+        }
     }
 }

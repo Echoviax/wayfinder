@@ -56,7 +56,7 @@ Consider supporting the project on **[Ko-Fi](https://ko-fi.com//Echoviax)**. The
 ## Logs
 Yes these should be in a logs folder. Don't think about it too hard.
 
-* **`ModLoader_Log.txt`**: Records startup and lists every mod that loaded (or failed).
+* **`Wayfinder_Log.txt`**: Records startup and lists every mod that loaded (or failed). Also records everything that prints to the console during gameplay
 
 ---
 

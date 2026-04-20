@@ -145,7 +145,7 @@ namespace Wayfinder.UI
                             }
 
                             // feed update to the mod
-                            if (_viewingConfigFor.Mod is API.IConfigurableMod liveUpdateMod)
+                            if (_viewingConfigFor.Mod is IConfigurableMod liveUpdateMod)
                                 liveUpdateMod.InitializeConfig(config);
                         }
                     }
@@ -211,7 +211,7 @@ namespace Wayfinder.UI
                         optionsArray[i + 1] = new OptionsStateMachine.OptionsData(mod.Mod.Name)
                         {
                             Check = mod.IsEnabled,
-                            Tooltip = $"{(string.IsNullOrEmpty(mod.Mod.Description) ? "No description." : mod.Mod.Description)}{(mod.Mod is API.IConfigurableMod ? "\n\nPress Enter to configure." : "")}"
+                            Tooltip = $"{(string.IsNullOrEmpty(mod.Mod.Description) ? "No description." : mod.Mod.Description)}{(mod.Mod is IConfigurableMod ? "\n\nPress Enter to configure." : "")}"
                         };
                     }
                 }

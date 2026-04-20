@@ -1,4 +1,6 @@
-﻿namespace Wayfinder.API
+﻿using Wayfinder.API;
+
+namespace Wayfinder.API
 {
     public interface IModConfig
     {
@@ -31,8 +33,35 @@
         void Stop(); 
     }
 
-    public interface IConfigurableMod : IWayfinderMod
+    // Modders should inherit this now!
+    public abstract class WayfinderMod : IWayfinderMod
     {
-        void InitializeConfig(IModConfig config);
+        public abstract string ID { get; }
+        public abstract string Name { get; }
+        public abstract string Description { get; }
+        public abstract string Version { get; }
+        public abstract string Author { get; }
+
+        public string ModDirectory { get; internal set; } = "";
+        public IModConfig Config { get; internal set; } = null!;
+
+        public abstract void Start();
+        public abstract void Stop();
     }
+
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+    public class WayfinderDependencyAttribute : Attribute
+    {
+        public string DependencyID { get; }
+
+        public WayfinderDependencyAttribute(string dependencyID)
+        {
+            DependencyID = dependencyID;
+        }
+    }
+}
+
+public interface IConfigurableMod : IWayfinderMod
+{
+    void InitializeConfig(IModConfig config);
 }
