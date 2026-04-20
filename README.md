@@ -45,7 +45,15 @@ If you are playing via Steam / Proton, launch **`Wayfinder.Launcher`** through y
 
 ---
 
-## Troubleshooting & Logs
+## Community / Support
+Looking for mods, need help troubleshooting, or want to learn how to make your own? Join the modding community on **[Discord](https://discord.gg/BzgPQgw2nD)**!
+
+Enjoy the work we do on **[Wayfinder](https://github.com/Echoviax/wayfinder)** and **Neverway** mods? 
+Consider supporting the project on **[Ko-Fi](https://ko-fi.com//Echoviax)**. There is no obligation to donate, but it would be greatly appreciated!
+
+---
+
+## Logs
 Yes these should be in a logs folder. Don't think about it too hard.
 
 * **`ModLoader_Log.txt`**: Records startup and lists every mod that loaded (or failed).
@@ -218,11 +226,3 @@ namespace ConfigModTemplate
 3. Navigate to the game's root directory and open the `Mods` folder (Wayfinder will create this folder automatically on its first run)
 4. Drop your `.dll` into the `Mods` folder
 5. Launch the game!
-
----
-
-### Neverway Modding Discord
-Interested in seeing further development in modding? Have questions and/or concerns? Join the modding [Discord](https://discord.gg/BzgPQgw2nD)!
-### Support Us...
-Enjoy the work we do on **[Wayfinder](https://github.com/Echoviax/wayfinder)** and **Neverway** mods?  
-We have a [Ko-Fi](https://ko-fi.com//Echoviax)! There is no obligation to donate, but it would be greatly appreciated.
