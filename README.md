@@ -5,6 +5,17 @@ A  mod loader for **Neverway**. (Tested for prologue)
 Wayfinder is a drag-and-drop program to make modding as accessible as possible.
 *Neverway* is packaged as a .NET single-file application, and so standard tools like BepInEx don't work as easily with it. Wayfinder *found a way* (I'll stop) around this using .NET startup hooks.
 
+## Prerequisites
+Wayfinder runs on .NET 8. Before installing, you **must** have the .NET 8 Desktop Runtime installed on your computer, or the launcher will instantly crash.
+
+### Windows
+**[Download Here](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)**
+
+### Linux
+Use your preferred package manager to install the .NET 8.0 runtime 
+
+---
+
 ## Installation
 
 **Step 1: Extract the files**
